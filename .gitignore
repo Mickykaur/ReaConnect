@@ -3,3 +3,7 @@ backend/data
 node_modules
 backend/__tests__
 launch.json
+
+.env
+*.pyc
+__pycache__
