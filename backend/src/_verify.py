@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 # ── Test 1: chat_history ──────────────────────────────────────────────────
-import chat_history
+from services import chat_history
 
 chat_history.initialize_database()
 print("OK  chat_history.py imports and initializes database")
@@ -29,10 +29,10 @@ assert chat_history.conversation_exists(conv_id) is True
 assert chat_history.conversation_exists("fake-id-000") is False
 print("OK  conversation_exists() works correctly")
 
-# ── Test 2: chat_api syntax ───────────────────────────────────────────────
-import chat_api
-print("OK  chat_api.py imports without errors")
-print("    FastAPI app title:", chat_api.app.title)
+# ── Test 2: app syntax ───────────────────────────────────────────────────
+import app
+print("OK  app.py imports without errors")
+print("    FastAPI app title:", app.app.title)
 
 print()
 print("All checks passed!")

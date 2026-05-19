@@ -20,10 +20,11 @@ from typing import Optional
 # Where the database file lives on disk
 # ---------------------------------------------------------------------------
 # Path(__file__) is the location of THIS file (chat_history.py).
-# .parent goes up one folder (to backend/src/).
-# .parent again goes up another folder (to backend/).
+# .parent goes up one folder (to backend/src/services/).
+# .parent again goes up another folder (to backend/src/).
+# .parent once more goes up to (backend/).
 # Then we put the database file inside a "db" subfolder.
-DB_DIR = Path(__file__).parent.parent / "db"
+DB_DIR = Path(__file__).parent.parent.parent / "db"
 DB_PATH = DB_DIR / "chat_history.db"
 
 

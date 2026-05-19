@@ -1,14 +1,38 @@
-"""FastMCP server for ReaConnect real estate data."""
+"""
+FastMCP server for ReaConnect real estate data.
+
+This file runs as a SEPARATE subprocess — it's NOT imported by the main app.
+Instead, the main app launches this script as a child process and talks to it
+through standard input/output (stdin/stdout), like passing notes through a slot.
+
+Because it runs separately, we need to add the src/ directory to Python's
+search path so it can find the services package.
+"""
 
 import os
+import sys
 from pathlib import Path
 import json
+
+# ---------------------------------------------------------------------------
+# Since this script runs as a standalone subprocess, Python doesn't know
+# where to find our other packages (services/, etc.). We add the src/
+# directory to Python's path so imports like "from services.data_loader"
+# will work. Think of this like adding a bookmark so Python knows where
+# to look for files.
+# ---------------------------------------------------------------------------
+# Path(__file__) = this file (server.py)
+# .parent       = tools/ folder
+# .parent       = src/ folder  ← this is what we need on the path
+_SRC_DIR = str(Path(__file__).parent.parent)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
-from data_loader import DataLoader
-from query_engine import QueryEngine, build_filter_dict
+from services.data_loader import DataLoader
+from services.query_engine import QueryEngine, build_filter_dict
 
 
 # Initialize FastMCP server
@@ -16,7 +40,8 @@ mcp = FastMCP("reaconnect-listings", "1.0.0")
 
 # Initialize data and query components
 # Determine data directory relative to this script
-DATA_DIR = Path(__file__).parent.parent / "data"
+# Path(__file__) = tools/server.py → .parent = tools/ → .parent = src/ → .parent = backend/
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
 loader = DataLoader(str(DATA_DIR))
 engine = QueryEngine()
 
