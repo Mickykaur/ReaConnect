@@ -9,6 +9,9 @@
  * This is a "presentational" component — it just displays data it receives.
  * It doesn't fetch data or manage state. Think of it as a picture frame:
  * you give it a picture (the message), and it displays it nicely.
+ *
+ * NOTE: Tool messages (role === "tool") are handled by the separate
+ * ToolEvent component — ChatMessage only handles "user" and "assistant".
  */
 
 "use client"; // Runs in the browser (needed for MUI components)

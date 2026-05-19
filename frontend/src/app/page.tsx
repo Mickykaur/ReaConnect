@@ -9,12 +9,18 @@
  *
  * It connects all our components together:
  *   ChatLayout (the frame)
- *     └── ChatWindow (the message list)
+ *     └── ChatWindow (the message list — including tool events!)
  *     └── ChatInput (the text box + send button)
  *
- * Think of this page as the conductor of an orchestra — it doesn't play
- * any instrument itself, but it tells each section when to play and
- * makes sure they all work together harmoniously.
+ * NEW: This page now uses STREAMING to show live updates from the AI.
+ * Instead of waiting for the full response, the user sees:
+ * 1. 🔧 "Calling query_listings..." (tool call event)
+ * 2. ✅ "Result from query_listings..." (tool result event)
+ * 3. 💬 "Here are the homes..." (AI text, appearing word by word)
+ *
+ * Think of the old version like ordering food and waiting silently.
+ * The new version is like the waiter telling you: "I sent your order
+ * to the kitchen... The chef is making it... Here it comes!"
  */
 
 "use client"; // This page runs in the browser (it uses state and event handlers)
@@ -25,7 +31,8 @@ import Snackbar from "@mui/material/Snackbar";
 import ChatLayout from "@/components/ChatLayout";
 import ChatWindow from "@/components/ChatWindow";
 import ChatInput from "@/components/ChatInput";
-import { sendChatMessage } from "@/lib/chatApi";
+import { sendChatMessageStreaming } from "@/lib/chatApi";
+import type { StreamEvent } from "@/lib/chatApi";
 import type { Message } from "@/components/ChatWindow";
 
 // ---------------------------------------------------------------------------
@@ -48,9 +55,10 @@ export default function ChatPage() {
   // Error message to show (null = no error)
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // ---- Handler: Send a message ----
-  // useCallback prevents this function from being re-created on every render.
-  // Think of it like writing the instructions once and reusing the same sheet.
+  // ---- Handler: Send a message (STREAMING version) ----
+  // This is the main function that handles user messages. It now uses
+  // streaming, which means we get updates from the backend in real-time
+  // instead of waiting for everything to finish.
   const handleSendMessage = useCallback(
     async (userMessage: string) => {
       // Step 1: Immediately show the user's message in the chat
@@ -63,37 +71,126 @@ export default function ChatPage() {
 
       setMessages((previousMessages) => [...previousMessages, newUserMessage]);
 
-      // Step 2: Show the loading indicator
+      // Step 2: Show the loading indicator and clear any previous error
       setIsLoading(true);
-      setErrorMessage(null); // Clear any previous error
+      setErrorMessage(null);
 
       try {
-        // Step 3: Send the message to the backend via our API helper
-        // This goes: chatApi.ts → /api/chat proxy → Python backend → AI
-        const response = await sendChatMessage(userMessage, conversationId ?? undefined);
+        // Step 3: Send the message using our streaming function
+        // The onEvent callback below is called every time a new
+        // event arrives from the backend. Think of it as:
+        // "Every time the backend has something to say, do THIS."
+        await sendChatMessageStreaming(
+          userMessage,
+          // --- The event handler (callback) ---
+          // This function is called for EACH event from the stream.
+          // Different event types trigger different UI updates.
+          (event: StreamEvent) => {
+            switch (event.type) {
+              // --- The backend tells us the conversation ID ---
+              // We save this so future messages continue the same conversation
+              case "conversation_id":
+                setConversationId(event.conversation_id);
+                break;
 
-        // Step 4: Save the conversation ID (so future messages continue this chat)
-        setConversationId(response.conversation_id);
+              // --- The AI is calling a tool ---
+              // Add a tool message to show the user what's happening
+              case "tool_call": {
+                // Format the tool input as readable text
+                // JSON.stringify with spacing makes it look nice
+                const inputText = JSON.stringify(event.input, null, 2);
 
-        // Step 5: Add the AI's reply to the messages list
-        const aiReply: Message = {
-          role: "assistant",
-          content: response.reply,
-        };
-        setMessages((previousMessages) => [...previousMessages, aiReply]);
+                const toolMessage: Message = {
+                  role: "tool",
+                  content: inputText,
+                  toolName: event.name,
+                  toolType: "call",
+                };
+
+                setMessages((prev) => [...prev, toolMessage]);
+                break;
+              }
+
+              // --- A tool returned its results ---
+              // Add another tool message showing the results
+              case "tool_result": {
+                // Safety: event.output might be an object or a string.
+                // We need a string for React to display. If it's already
+                // a string, use it as-is. If it's an object, convert it
+                // to a nicely formatted JSON string.
+                const outputText =
+                  typeof event.output === "string"
+                    ? event.output
+                    : JSON.stringify(event.output, null, 2);
+
+                const resultMessage: Message = {
+                  role: "tool",
+                  content: outputText,
+                  toolName: event.name,
+                  toolType: "result",
+                };
+
+                setMessages((prev) => [...prev, resultMessage]);
+                break;
+              }
+
+              // --- A chunk of the AI's text response ---
+              // This is where we build up the assistant's reply
+              // piece by piece, like a typewriter effect.
+              case "text": {
+                setMessages((prev) => {
+                  // Look at the last message in our list
+                  const lastMessage = prev[prev.length - 1];
+
+                  // If the last message is already an assistant message,
+                  // we APPEND this text chunk to it (building it up)
+                  if (lastMessage && lastMessage.role === "assistant") {
+                    // Create a new array with all messages except the last one,
+                    // then add the updated last message with the new text appended
+                    const updatedMessages = [...prev];
+                    updatedMessages[updatedMessages.length - 1] = {
+                      ...lastMessage,
+                      content: lastMessage.content + event.content,
+                    };
+                    return updatedMessages;
+                  }
+
+                  // If the last message is NOT an assistant message,
+                  // this is the FIRST text chunk — create a new assistant message
+                  return [
+                    ...prev,
+                    { role: "assistant" as const, content: event.content },
+                  ];
+                });
+                break;
+              }
+
+              // --- The stream is complete ---
+              // Stop the loading indicator
+              case "done":
+                setIsLoading(false);
+                break;
+
+              // --- Something went wrong ---
+              // Show the error message
+              case "error":
+                setErrorMessage(event.message);
+                setIsLoading(false);
+                break;
+            }
+          },
+          // Pass the conversation ID if we have one
+          conversationId ?? undefined,
+        );
       } catch (error) {
-        // Something went wrong — show an error message
-        // "instanceof Error" checks if the error is a proper Error object
+        // Something went wrong with the connection itself
+        // (not an error from the stream, but a network error)
         const message =
           error instanceof Error
             ? error.message
             : "An unexpected error occurred. Please try again.";
 
         setErrorMessage(message);
-      } finally {
-        // Step 6: Hide the loading indicator (whether success or failure)
-        // "finally" runs no matter what — like cleaning up after cooking,
-        // whether the meal turned out good or bad.
         setIsLoading(false);
       }
     },

@@ -8,6 +8,15 @@
  * - Automatically scrolls to the bottom when new messages arrive
  * - Shows a welcome message when the conversation is empty
  * - Displays a "thinking" indicator when the AI is processing
+ * - NEW: Shows tool call and tool result events in real-time!
+ *
+ * We now support THREE types of messages:
+ * 1. "user" — what the human typed (rendered by ChatMessage)
+ * 2. "assistant" — what the AI replied (rendered by ChatMessage)
+ * 3. "tool" — when the AI calls a tool or gets results (rendered by ToolEvent)
+ *
+ * This component acts like a traffic cop — it looks at each message's
+ * role and decides which component should display it.
  */
 
 "use client";
@@ -17,15 +26,32 @@ import Typography from "@mui/material/Typography";
 import CircularProgress from "@mui/material/CircularProgress";
 import HomeIcon from "@mui/icons-material/Home";
 import ChatMessage from "./ChatMessage";
+import ToolEvent from "./ToolEvent";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** A single message in the conversation */
+/**
+ * A single message in the conversation.
+ *
+ * BEFORE streaming, we only had "user" and "assistant" messages.
+ * NOW we also have "tool" messages that show when the AI is calling
+ * a tool or when a tool returns results.
+ *
+ * Think of it like a group chat:
+ * - "user" = you talking
+ * - "assistant" = the AI talking
+ * - "tool" = a helper in the background reporting what they're doing
+ */
 export interface Message {
-  role: "user" | "assistant";
+  // Who sent this message?
+  role: "user" | "assistant" | "tool";
+  // The text content of the message
   content: string;
+  // Extra info for tool messages (only present when role === "tool")
+  toolName?: string; // Which tool was called (e.g. "query_listings")
+  toolType?: "call" | "result"; // Is this a call or a result?
 }
 
 interface ChatWindowProps {
@@ -95,16 +121,31 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
         </div>
       )}
 
-      {/* Render each message as a ChatMessage bubble */}
-      {messages.map((message, index) => (
-        <ChatMessage
-          // "key" helps React track which items changed — using index here
-          // because messages don't have unique IDs
-          key={index}
-          role={message.role}
-          content={message.content}
-        />
-      ))}
+      {/* Render each message using the RIGHT component for its type */}
+      {/* This is like a sorting machine: tool messages go to ToolEvent, */}
+      {/* everything else goes to ChatMessage */}
+      {messages.map((message, index) => {
+        // If it's a tool message, use the ToolEvent component
+        if (message.role === "tool") {
+          return (
+            <ToolEvent
+              key={index}
+              toolName={message.toolName || "unknown"}
+              toolType={message.toolType || "call"}
+              content={message.content}
+            />
+          );
+        }
+
+        // Otherwise (user or assistant), use the regular ChatMessage
+        return (
+          <ChatMessage
+            key={index}
+            role={message.role}
+            content={message.content}
+          />
+        );
+      })}
 
       {/* Loading indicator — shows when the AI is "thinking" */}
       {isLoading && (
