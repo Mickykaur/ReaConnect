@@ -1,0 +1,32 @@
+/**
+ * Global Styles for ReaConnect
+ *
+ * This file loads Tailwind CSS and sets up a few base styles.
+ * Think of this as the "default paint" for the whole house —
+ * every page starts with these styles unless overridden.
+ *
+ * The @import "tailwindcss" line loads ALL of Tailwind's utility
+ * classes (like flex, p-4, bg-blue-500, etc.) so we can use them
+ * anywhere in our components.
+ */
+
+/* Load Tailwind CSS — this single line gives us thousands of utility classes */
+@import "tailwindcss";
+
+/* 
+ * @theme inline lets us define custom CSS variables that Tailwind 
+ * can use. These map to the font variables loaded in layout.tsx.
+ */
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Base body styles.
+ * MUI's CssBaseline handles most resets, but we set the font here
+ * as a fallback in case something renders outside of MUI.
+ */
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}

@@ -19,6 +19,7 @@ Think of the agent like a smart research assistant:
 """
 
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -30,6 +31,9 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
 
 import chat_history
 
@@ -53,7 +57,7 @@ load_dotenv(dotenv_path=_ENV_PATH)
 _SERVER_SCRIPT = str(Path(__file__).parent / "server.py")
 
 MCP_SERVER_PARAMS = StdioServerParameters(
-    command="python",          # run Python
+    command=sys.executable,    # use the SAME Python that's running this app (from the venv)
     args=[_SERVER_SCRIPT],     # with our server.py script
     env=None,                  # inherit the current environment (includes OPENAI_API_KEY)
 )
